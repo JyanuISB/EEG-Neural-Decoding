@@ -125,10 +125,6 @@ async function checkStatus() {
   const data = await apiJSON('/api/status');
   if (!data) return;
 
-  if (!data.data_loaded) {
-    const banner = document.getElementById('warning-banner');
-    if (banner) banner.style.display = 'block';
-  }
   if (data.n_epochs > 0) {
     maxEpochIdx = data.n_epochs - 1;
     const slider = document.getElementById('epoch-slider');
