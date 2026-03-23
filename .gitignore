@@ -1,3 +1,3 @@
 data/*.npy
 data/*.pt
-data/*.png
+data/gradcam_*.png
