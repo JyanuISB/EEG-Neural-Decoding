@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EEG Neural Decode — Motor Imagery BCI</title>
+  <link rel="stylesheet" href="style.css" />
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ── Warning banner (shown if data not loaded) ─────────────────────────── -->
+<div id="warning-banner">
+  ⚠ &nbsp; Data not loaded. Run <code>python training/train.py</code> then restart the server.
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     [A] HERO
+     ═══════════════════════════════════════════════════════════════════════ -->
+<section id="hero">
+  <canvas id="brain-canvas"></canvas>
+
+  <div class="hero-prompt mono">
+    &gt; EEG_NEURAL_DECODE v2.0<span class="cursor"></span>
+  </div>
+
+  <h1>Motor Imagery BCI</h1>
+  <p class="hero-sub">
+    Decoding imagined hand movements from 64-channel EEG signals
+    using deep learning and Riemannian geometry.
+  </p>
+
+  <div class="stat-pills">
+    <span class="stat-pill">64 Channels</span>
+    <span class="stat-pill">160 Hz</span>
+    <span class="stat-pill">PhysioNet EEGBCI</span>
+    <span class="stat-pill">S001 &ndash; S010</span>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     [B] CONTROLS BAR
+     ═══════════════════════════════════════════════════════════════════════ -->
+<nav id="controls-bar">
+  <div class="ctrl-group">
+    <span class="ctrl-label">Subject</span>
+    <select id="subject-sel">
+      <option value="8">S008 (test)</option>
+      <option value="9">S009 (test)</option>
+      <option value="10">S010 (test)</option>
+      <option value="1">S001 (train)</option>
+      <option value="2">S002 (train)</option>
+      <option value="3">S003 (train)</option>
+      <option value="4">S004 (train)</option>
+      <option value="5">S005 (train)</option>
+      <option value="6">S006 (train)</option>
+      <option value="7">S007 (train)</option>
+    </select>
+  </div>
+
+  <div class="ctrl-group">
+    <span class="ctrl-label">Model</span>
+    <select id="model-sel">
+      <option value="eegnet">EEGNet</option>
+      <option value="cnn_lstm">CNN-LSTM</option>
+      <option value="mdm">Riemannian MDM</option>
+    </select>
+  </div>
+
+  <div class="ctrl-group" id="epoch-group">
+    <span class="ctrl-label">Epoch &nbsp;<span id="epoch-display">0</span> / <span id="epoch-max">—</span></span>
+    <div class="epoch-row">
+      <input type="range" id="epoch-slider" min="0" max="134" value="0" step="1" />
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     [C] DATA OVERVIEW
+     ═══════════════════════════════════════════════════════════════════════ -->
+<section id="overview">
+  <div class="metric-grid">
+    <div class="metric-card">
+      <div class="metric-value" id="m-epochs">—</div>
+      <div class="metric-label">Total Epochs</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value" id="m-channels">—</div>
+      <div class="metric-label">EEG Channels</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value" id="m-times">—</div>
+      <div class="metric-label">Time Points</div>
+    </div>
+    <div class="metric-card">
+      <div class="metric-value" id="m-duration">—</div>
+      <div class="metric-label">Duration (s)</div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="section-title">class_distribution.log</div>
+    <div id="dist-chart-wrap">
+      <canvas id="dist-chart"></canvas>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     [D] LIVE EPOCH PLAYBACK
+     ═══════════════════════════════════════════════════════════════════════ -->
+<section id="epoch-panel">
+
+  <!-- Left: waveform -->
+  <div class="card" id="waveform-card">
+    <div class="section-title">epoch_playback.exe</div>
+    <div id="waveform-chart-wrap">
+      <canvas id="waveform-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Right: prediction -->
+  <div class="card" id="pred-card">
+    <div class="section-title">inference_result.log</div>
+
+    <div class="pred-row">
+      <div class="pred-label">True Class</div>
+      <div class="pred-value" id="true-label">—</div>
+    </div>
+
+    <div class="pred-row">
+      <div class="pred-label">Predicted</div>
+      <div class="pred-value" id="pred-label">—</div>
+    </div>
+
+    <div class="pred-row">
+      <div class="pred-label">Confidence</div>
+      <div class="conf-bars" id="conf-bars">
+        <div class="conf-row">
+          <div class="conf-row-label">
+            <span>Left Hand</span><span id="prob-left">0%</span>
+          </div>
+          <div class="conf-bar-bg">
+            <div class="conf-bar-fill" id="bar-left" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="conf-row">
+          <div class="conf-row-label">
+            <span>Right Hand</span><span id="prob-right">0%</span>
+          </div>
+          <div class="conf-bar-bg">
+            <div class="conf-bar-fill" id="bar-right" style="width:0%;background:linear-gradient(90deg,var(--cyan),#0077aa)"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="epoch-meta" id="epoch-meta">
+      model: eegnet &nbsp;|&nbsp; epoch: 0
+    </div>
+  </div>
+
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     [E] GRADCAM
+     ═══════════════════════════════════════════════════════════════════════ -->
+<section id="gradcam-panel">
+  <div class="card">
+    <div class="section-title">gradcam_topomap.py</div>
+    <div id="gradcam-inner">
+
+      <div>
+        <img id="gradcam-img" class="topomap-img"
+             src="" alt="GradCAM topomap loading..." />
+        <div class="top-channels" id="top-channels">
+          &gt; loading electrode activations...
+        </div>
+      </div>
+
+      <div>
+        <!-- Reference electrode SVG (10-20 system schematic) -->
+        <svg id="electrode-svg" viewBox="0 0 300 320" xmlns="http://www.w3.org/2000/svg"
+             style="border:1px solid var(--border);border-radius:8px;background:#111;">
+
+          <!-- Skull outline -->
+          <ellipse cx="150" cy="155" rx="120" ry="130" fill="none"
+                   stroke="rgba(0,255,136,0.3)" stroke-width="1.5"/>
+          <!-- Nose indicator -->
+          <path d="M138,28 Q150,14 162,28" fill="none"
+                stroke="rgba(0,255,136,0.3)" stroke-width="1.5"/>
+          <!-- Ear indicators -->
+          <path d="M30,145 Q22,155 30,165" fill="none"
+                stroke="rgba(0,255,136,0.3)" stroke-width="1.5"/>
+          <path d="M270,145 Q278,155 270,165" fill="none"
+                stroke="rgba(0,255,136,0.3)" stroke-width="1.5"/>
+
+          <!-- Horizontal / vertical grid lines -->
+          <line x1="30" y1="155" x2="270" y2="155" stroke="#1e1e1e" stroke-width="1"/>
+          <line x1="150" y1="28"  x2="150" y2="282" stroke="#1e1e1e" stroke-width="1"/>
+
+          <!-- Key electrode dots + labels -->
+          <!-- Central line -->
+          <g fill="var(--green)" font-family="JetBrains Mono,monospace" font-size="9" text-anchor="middle">
+            <circle cx="150" cy="45"  r="5" opacity="0.9"/><text x="150" y="38"  fill="#00ff88">Fz</text>
+            <circle cx="150" cy="100" r="5" opacity="0.9"/><text x="150" y="93"  fill="#00ff88">FCz</text>
+            <circle cx="150" cy="155" r="6" opacity="1"  fill="var(--cyan)"/><text x="150" y="148" fill="#00cfff">Cz</text>
+            <circle cx="150" cy="210" r="5" opacity="0.9"/><text x="150" y="203" fill="#00ff88">CPz</text>
+            <circle cx="150" cy="260" r="5" opacity="0.9"/><text x="150" y="253" fill="#00ff88">Pz</text>
+            <!-- Left hemisphere (motor) -->
+            <circle cx="90"  cy="155" r="6" opacity="1"  fill="#ff6688"/><text x="76"  y="148" fill="#ff6688">C3</text>
+            <circle cx="90"  cy="100" r="5" opacity="0.9"/><text x="76"  y="93"  fill="#00ff88">FC3</text>
+            <circle cx="90"  cy="210" r="5" opacity="0.9"/><text x="76"  y="203" fill="#00ff88">CP3</text>
+            <!-- Right hemisphere (motor) -->
+            <circle cx="210" cy="155" r="6" opacity="1"  fill="#ff6688"/><text x="224" y="148" fill="#ff6688">C4</text>
+            <circle cx="210" cy="100" r="5" opacity="0.9"/><text x="224" y="93"  fill="#00ff88">FC4</text>
+            <circle cx="210" cy="210" r="5" opacity="0.9"/><text x="224" y="203" fill="#00ff88">CP4</text>
+            <!-- Frontal -->
+            <circle cx="90"  cy="80"  r="4" opacity="0.7"/><text x="74"  y="73"  fill="#888">F3</text>
+            <circle cx="210" cy="80"  r="4" opacity="0.7"/><text x="224" y="73"  fill="#888">F4</text>
+            <circle cx="120" cy="45"  r="4" opacity="0.7"/><text x="106" y="38"  fill="#888">F3</text>
+            <circle cx="180" cy="45"  r="4" opacity="0.7"/><text x="194" y="38"  fill="#888">F4</text>
+            <!-- Parietal/Occipital -->
+            <circle cx="90"  cy="230" r="4" opacity="0.7"/><text x="74"  y="223" fill="#888">P3</text>
+            <circle cx="210" cy="230" r="4" opacity="0.7"/><text x="224" y="223" fill="#888">P4</text>
+          </g>
+
+          <!-- Legend -->
+          <circle cx="30" cy="300" r="4" fill="#ff6688"/>
+          <text x="40" y="304" font-family="JetBrains Mono,monospace" font-size="9" fill="#888">Motor cortex (C3/C4)</text>
+          <circle cx="30" cy="315" r="4" fill="var(--cyan)"/>
+          <text x="40" y="319" font-family="JetBrains Mono,monospace" font-size="9" fill="#888">Vertex (Cz)</text>
+        </svg>
+
+        <p class="gradcam-explain" style="margin-top:16px">
+          GradCAM highlights which electrodes most influenced the model's decision.
+          Motor imagery typically activates <span class="green">C3</span> (left motor cortex)
+          for right-hand imagery and <span class="cyan">C4</span> for left-hand imagery —
+          contralateral to the imagined movement.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     [F] MODEL COMPARISON
+     ═══════════════════════════════════════════════════════════════════════ -->
+<section id="comparison-panel">
+  <div class="card">
+    <div class="section-title">model_benchmark.log</div>
+
+    <table id="bench-table">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Accuracy</th>
+          <th>Cohen's &kappa;</th>
+          <th>Type</th>
+        </tr>
+      </thead>
+      <tbody id="bench-body">
+        <tr><td colspan="4" style="color:var(--muted);text-align:center">Loading...</td></tr>
+      </tbody>
+    </table>
+
+    <div class="section-title" style="margin-top:8px">training_curves/</div>
+    <div class="curve-grid">
+      <div>
+        <div class="curve-label">EEGNet</div>
+        <img id="curve-eegnet" src="/api/training_curve/eegnet" alt="EEGNet training curves" />
+      </div>
+      <div>
+        <div class="curve-label">CNN-LSTM</div>
+        <img id="curve-cnnlstm" src="/api/training_curve/cnn_lstm" alt="CNN-LSTM training curves" />
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════════
+     [G] FOOTER
+     ═══════════════════════════════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-author">
+    Built by <span>Yanu</span> &nbsp;&mdash;&nbsp;
+  </div>
+  <div class="footer-stack">
+    Python &middot; PyTorch &middot; MNE &middot; FastAPI &middot; Vanilla JS
+  </div>
+  <a href="#" class="footer-link">[ GitHub ]</a>
+</footer>
+
+<script src="main.js"></script>
+</body>
+</html>
